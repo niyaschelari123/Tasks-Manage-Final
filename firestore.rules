@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return request.auth != null && 
+             request.auth.token.email != null &&
+             request.auth.token.email.matches('(?i).*admin@gmail.com');
+    }
+    
+    // Config collection - allow public read for userTypes (needed for signup), write only for admin
+    match /config/{document} {
+      // Allow anyone to read userTypes (needed for signup page)
+      allow read: if document == 'userTypes' || request.auth != null;
+      // Only admin can write
+      allow write: if isAdmin();
+    }
+    
+    // Users collection - allow all authenticated users to read (needed for user dropdowns)
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+    }
+    
+    // Projects collection - allow all authenticated users to read
+    match /projects/{projectId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+    
+    // Tasks collection - allow all authenticated users to read
+    match /tasks/{taskId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      
+      // Allow update if:
+      // 1. User is the task owner (can update anything), OR
+      // 2. User is admin (can update anything), OR
+      // 3. User is authenticated and userId hasn't changed (allows request-related updates by non-owners)
+      allow update: if request.auth != null && (
+        resource.data.userId == request.auth.uid || 
+        isAdmin() ||
+        // Allow non-owners to update if userId hasn't changed (prevents ownership changes)
+        // This allows them to add reassignmentRequest, permissionRequest, etc.
+        (resource.data.userId == request.resource.data.userId &&
+         resource.data.userId != request.auth.uid)
+      );
+      
+      allow delete: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+  }
+}
