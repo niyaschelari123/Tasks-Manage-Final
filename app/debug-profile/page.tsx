@@ -38,6 +38,7 @@ export default function DebugProfilePage() {
           uid: user.uid,
           email: user.email,
           displayName: undefined,
+          username: 'admin',
           userType: 'admin',
           isAdmin: true,
         });
