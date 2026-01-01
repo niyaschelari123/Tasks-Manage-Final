@@ -73,7 +73,7 @@ export default function ProjectManager({ onProjectCreated }: ProjectManagerProps
     return (
       <button
         onClick={() => setShowForm(true)}
-        className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200"
+        className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 mt-10"
       >
         + New Project
       </button>
