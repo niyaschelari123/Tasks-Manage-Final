@@ -116,7 +116,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Check if user is inactive and sign them out
         if (profile.status === 'inactive') {
           console.log("User is inactive, signing out...");
-          await firebaseSignOut(auth);
+          if (auth) {
+            await firebaseSignOut(auth);
+          }
           setUser(null);
           setUserProfile(null);
         }
