@@ -105,3 +105,15 @@ export interface Notification {
   readAt?: Date;
 }
 
+export interface ImportantItem {
+  id: string;
+  title: string;
+  description: string; // Rich text HTML content
+  slug: string; // URL-friendly version of title
+  createdAt: Date;
+  updatedAt: Date;
+  userId: string; // User who created it
+  userEmail?: string;
+  username?: string;
+}
+

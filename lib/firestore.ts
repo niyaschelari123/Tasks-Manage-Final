@@ -30,6 +30,7 @@ import {
   TaskHistory,
   HistoryAction,
   Notification,
+  ImportantItem,
 } from "@/types";
 
 // Helper function to remove undefined values from object (recursive for nested objects)
@@ -1610,4 +1611,251 @@ export function subscribeToNotifications(
       unsubscribe();
     }
   };
+}
+
+// ==================== Important Items Functions ====================
+
+/**
+ * Create a URL-friendly slug from a title
+ */
+function createSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '') // Remove special characters
+    .replace(/[\s_-]+/g, '-') // Replace spaces and underscores with hyphens
+    .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+}
+
+/**
+ * Create a new important item
+ */
+export async function createImportantItem(
+  title: string,
+  description: string,
+  user: { uid: string; email?: string; username?: string }
+): Promise<string> {
+  if (!db) {
+    throw new Error("Firestore is not initialized");
+  }
+
+  try {
+    const slug = createSlug(title);
+    
+    // Check if slug already exists for this user
+    const existingQuery = query(
+      collection(db, "importantItems"),
+      where("slug", "==", slug),
+      where("userId", "==", user.uid)
+    );
+    const existingDocs = await getDocs(existingQuery);
+    
+    let finalSlug = slug;
+    if (!existingDocs.empty) {
+      // If slug exists for this user, append a number
+      let counter = 1;
+      do {
+        finalSlug = `${slug}-${counter}`;
+        const checkQuery = query(
+          collection(db, "importantItems"),
+          where("slug", "==", finalSlug),
+          where("userId", "==", user.uid)
+        );
+        const checkDocs = await getDocs(checkQuery);
+        if (checkDocs.empty) break;
+        counter++;
+      } while (true);
+    }
+
+    const now = Timestamp.now();
+    const docRef = await addDoc(collection(db, "importantItems"), {
+      title: title.trim(),
+      description,
+      slug: finalSlug,
+      createdAt: now,
+      updatedAt: now,
+      userId: user.uid,
+      userEmail: user.email || null,
+      username: user.username || null,
+    });
+
+    return docRef.id;
+  } catch (error: any) {
+    console.error("Error creating important item:", error);
+    throw new Error(`Failed to create important item: ${error.message}`);
+  }
+}
+
+/**
+ * Get all important items for a specific user
+ */
+export async function getAllImportantItems(userId: string): Promise<ImportantItem[]> {
+  if (!db) {
+    throw new Error("Firestore is not initialized");
+  }
+
+  try {
+    const q = query(
+      collection(db, "importantItems"),
+      where("userId", "==", userId),
+      orderBy("createdAt", "desc")
+    );
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        title: data.title,
+        description: data.description || "",
+        slug: data.slug,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || new Date(),
+        userId: data.userId,
+        userEmail: data.userEmail,
+        username: data.username,
+      };
+    });
+  } catch (error: any) {
+    // If index is missing, fall back to query without orderBy
+    if (
+      error.code === "failed-precondition" ||
+      error.message?.includes("index")
+    ) {
+      console.warn("Index not found, using fallback query without orderBy");
+      const fallbackQuery = query(
+        collection(db, "importantItems"),
+        where("userId", "==", userId)
+      );
+      const snapshot = await getDocs(fallbackQuery);
+      const items = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          title: data.title,
+          description: data.description || "",
+          slug: data.slug,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+          userId: data.userId,
+          userEmail: data.userEmail,
+          username: data.username,
+        };
+      });
+      // Sort manually in memory
+      return items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    } else {
+      console.error("Error fetching important items:", error);
+      throw new Error(`Failed to fetch important items: ${error.message}`);
+    }
+  }
+}
+
+/**
+ * Get an important item by slug for a specific user
+ */
+export async function getImportantItemBySlug(slug: string, userId: string): Promise<ImportantItem | null> {
+  if (!db) {
+    throw new Error("Firestore is not initialized");
+  }
+
+  try {
+    const q = query(
+      collection(db, "importantItems"),
+      where("slug", "==", slug),
+      where("userId", "==", userId)
+    );
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+      return null;
+    }
+
+    const doc = snapshot.docs[0];
+    const data = doc.data();
+    return {
+      id: doc.id,
+      title: data.title,
+      description: data.description || "",
+      slug: data.slug,
+      createdAt: data.createdAt?.toDate() || new Date(),
+      updatedAt: data.updatedAt?.toDate() || new Date(),
+      userId: data.userId,
+      userEmail: data.userEmail,
+      username: data.username,
+    };
+  } catch (error: any) {
+    console.error("Error fetching important item by slug:", error);
+    throw new Error(`Failed to fetch important item: ${error.message}`);
+  }
+}
+
+/**
+ * Update an important item
+ */
+export async function updateImportantItem(
+  id: string,
+  title: string,
+  description: string,
+  user: { uid: string; email?: string; username?: string }
+): Promise<void> {
+  if (!db) {
+    throw new Error("Firestore is not initialized");
+  }
+
+  try {
+    const slug = createSlug(title);
+    const docRef = doc(db, "importantItems", id);
+    
+    // Check if slug already exists for another document of this user
+    const existingQuery = query(
+      collection(db, "importantItems"),
+      where("slug", "==", slug),
+      where("userId", "==", user.uid)
+    );
+    const existingDocs = await getDocs(existingQuery);
+    
+    let finalSlug = slug;
+    if (!existingDocs.empty && existingDocs.docs[0].id !== id) {
+      // If slug exists for another document of this user, append a number
+      let counter = 1;
+      do {
+        finalSlug = `${slug}-${counter}`;
+        const checkQuery = query(
+          collection(db, "importantItems"),
+          where("slug", "==", finalSlug),
+          where("userId", "==", user.uid)
+        );
+        const checkDocs = await getDocs(checkQuery);
+        if (checkDocs.empty || checkDocs.docs[0].id === id) break;
+        counter++;
+      } while (true);
+    }
+
+    await updateDoc(docRef, {
+      title: title.trim(),
+      description,
+      slug: finalSlug,
+      updatedAt: Timestamp.now(),
+    });
+  } catch (error: any) {
+    console.error("Error updating important item:", error);
+    throw new Error(`Failed to update important item: ${error.message}`);
+  }
+}
+
+/**
+ * Delete an important item
+ */
+export async function deleteImportantItem(id: string): Promise<void> {
+  if (!db) {
+    throw new Error("Firestore is not initialized");
+  }
+
+  try {
+    await deleteDoc(doc(db, "importantItems", id));
+  } catch (error: any) {
+    console.error("Error deleting important item:", error);
+    throw new Error(`Failed to delete important item: ${error.message}`);
+  }
 }

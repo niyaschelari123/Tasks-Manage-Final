@@ -53,9 +53,17 @@ export default function DashboardPage() {
         <nav className="bg-white shadow-sm border-b">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
-              <h1 className="text-xl font-bold text-gray-800">
-                Task Management System
-              </h1>
+              <div className="flex items-center gap-6">
+                <h1 className="text-xl font-bold text-gray-800">
+                  Task Management System
+                </h1>
+                <button
+                  onClick={() => router.push("/important")}
+                  className="px-3 py-1.5 text-sm text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                >
+                  Important
+                </button>
+              </div>
               <div className="flex items-center gap-4">
                 <NotificationDropdown />
                 <span className="text-sm text-gray-600">{user?.email}</span>
