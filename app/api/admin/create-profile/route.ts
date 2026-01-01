@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     await createUserProfile({
       uid: uid,
       email: email,
-      displayName: null,
+      displayName: undefined,
       username: email.split('@')[0] || 'user', // Default username from email
       userType: userType || (isAdmin ? 'admin' : 'user'),
       isAdmin: isAdmin,
