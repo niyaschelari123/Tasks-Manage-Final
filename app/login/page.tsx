@@ -61,7 +61,17 @@ export default function LoginPage() {
     setLoading(true);
 
     if (!auth) {
-      setError("Firebase is not initialized. Please check your configuration.");
+      const missingVars = [];
+      if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY) missingVars.push("NEXT_PUBLIC_FIREBASE_API_KEY");
+      if (!process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN) missingVars.push("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN");
+      if (!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) missingVars.push("NEXT_PUBLIC_FIREBASE_PROJECT_ID");
+      if (!process.env.NEXT_PUBLIC_FIREBASE_APP_ID) missingVars.push("NEXT_PUBLIC_FIREBASE_APP_ID");
+      
+      setError(
+        missingVars.length > 0
+          ? `Firebase is not initialized. Missing environment variables: ${missingVars.join(", ")}. Please add them in Vercel project settings under Settings > Environment Variables.`
+          : "Firebase is not initialized. Please check your Vercel environment variables."
+      );
       setLoading(false);
       return;
     }

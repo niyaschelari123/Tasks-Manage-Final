@@ -79,6 +79,7 @@ export default function TaskList({
     search: "",
     userId: "", // Filter by user when showAllTasks is enabled
     panel: "", // Filter by panel when project is selected
+    version: "", // Filter by version when project/panel is selected
   });
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [showBulkVersion, setShowBulkVersion] = useState(false);
@@ -148,6 +149,7 @@ export default function TaskList({
     const search = searchParams.get("search") || "";
     const userId = searchParams.get("userId") || "";
     const panel = searchParams.get("panel") || "";
+    const version = searchParams.get("version") || "";
     const filterByMeParam = searchParams.get("filterByMe") === "true";
     const showAllTasksParam = searchParams.get("showAllTasks") === "true";
 
@@ -160,6 +162,7 @@ export default function TaskList({
       search ||
       userId ||
       panel ||
+      version ||
       searchParams.has("filterByMe") ||
       searchParams.has("showAllTasks")
     ) {
@@ -171,6 +174,7 @@ export default function TaskList({
         search,
         userId,
         panel,
+        version,
       });
       // Handle showAllTasks first, as it takes precedence
       if (searchParams.has("showAllTasks")) {
@@ -292,6 +296,7 @@ export default function TaskList({
         toDate: filters.toDate ? new Date(filters.toDate) : undefined,
         search: filters.search || undefined,
         panel: filters.panel || undefined,
+        version: filters.version || undefined,
       };
 
       // Filter by user logic
@@ -864,6 +869,7 @@ export default function TaskList({
       search: "",
       userId: "",
       panel: "",
+      version: "",
     };
     setFilters(newFilters);
     // Reset to default filter (by user for non-admin)
@@ -1203,6 +1209,7 @@ export default function TaskList({
                   ...filters,
                   projectId: e.target.value,
                   panel: "",
+                  version: "", // Reset version when project changes
                 });
                 setSelectedTasks(new Set()); // Clear selection when project changes
               }}
@@ -1233,7 +1240,7 @@ export default function TaskList({
                     <select
                       value={filters.panel}
                       onChange={(e) => {
-                        setFilters({ ...filters, panel: e.target.value });
+                        setFilters({ ...filters, panel: e.target.value, version: "" }); // Reset version when panel changes
                         setSelectedTasks(new Set()); // Clear selection when panel changes
                       }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
@@ -1249,6 +1256,64 @@ export default function TaskList({
                 );
               }
               return null;
+            })()}
+          {filters.projectId &&
+            (() => {
+              const selectedProject = projects.find(
+                (p) => p.id === filters.projectId
+              );
+              const projectPanels = selectedProject?.panels || [];
+              
+              // Show version filter if:
+              // 1. Project has no panels (show immediately when project is selected)
+              // 2. Project has panels AND a panel is selected
+              const shouldShowVersionFilter = 
+                projectPanels.length === 0 || 
+                (projectPanels.length > 0 && filters.panel && filters.panel.trim() !== "");
+              
+              if (!shouldShowVersionFilter) {
+                return null;
+              }
+              
+              // Get unique versions from tasks for the selected project/panel
+              const projectTasks = tasks.filter((t) => {
+                if (t.projectId !== filters.projectId) return false;
+                if (projectPanels.length > 0 && filters.panel && filters.panel.trim() !== "") {
+                  return t.panel === filters.panel;
+                }
+                return true;
+              });
+              
+              const uniqueVersions = Array.from(
+                new Set(
+                  projectTasks
+                    .map((t) => t.version)
+                    .filter((v): v is string => !!v && v.trim() !== "")
+                )
+              ).sort();
+              
+              return (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Version
+                  </label>
+                  <select
+                    value={filters.version}
+                    onChange={(e) => {
+                      setFilters({ ...filters, version: e.target.value });
+                      setSelectedTasks(new Set()); // Clear selection when version changes
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">All Versions</option>
+                    {uniqueVersions.map((version) => (
+                      <option key={version} value={version}>
+                        {version}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
             })()}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">

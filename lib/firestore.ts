@@ -437,13 +437,14 @@ export async function getTasks(
 // Get all tasks (for viewing all tasks) with pagination support
 export async function getAllTasks(
   filters?: {
-    status?: TaskStatus;
-    projectId?: string;
-    fromDate?: Date;
-    toDate?: Date;
-    search?: string;
-    userId?: string; // Optional filter by user
+  status?: TaskStatus;
+  projectId?: string;
+  fromDate?: Date;
+  toDate?: Date;
+  search?: string;
+  userId?: string; // Optional filter by user
     panel?: string; // Optional filter by panel
+    version?: string; // Optional filter by version
   },
   pagination?: {
     pageSize?: number;
@@ -481,30 +482,30 @@ export async function getAllTasks(
         q = query(q, startAfter(pagination.lastDoc));
       }
 
-      const snapshot = await getDocs(q);
+    const snapshot = await getDocs(q);
       const lastVisible = snapshot.docs[snapshot.docs.length - 1];
 
-      tasks = snapshot.docs.map((doc) => {
+    tasks = snapshot.docs.map((doc) => {
         const data = doc.data() as any;
-        const createdAt = data.createdAt?.toDate
-          ? data.createdAt.toDate()
-          : data.createdAt instanceof Date
-          ? data.createdAt
-          : data.createdAt
-          ? new Date(data.createdAt)
-          : new Date();
-        const updatedAt = data.updatedAt?.toDate
-          ? data.updatedAt.toDate()
-          : data.updatedAt instanceof Date
-          ? data.updatedAt
-          : data.updatedAt
-          ? new Date(data.updatedAt)
-          : new Date();
-        return {
-          id: doc.id,
-          ...data,
-          createdAt,
-          updatedAt,
+      const createdAt = data.createdAt?.toDate
+        ? data.createdAt.toDate()
+        : data.createdAt instanceof Date
+        ? data.createdAt
+        : data.createdAt
+        ? new Date(data.createdAt)
+        : new Date();
+      const updatedAt = data.updatedAt?.toDate
+        ? data.updatedAt.toDate()
+        : data.updatedAt instanceof Date
+        ? data.updatedAt
+        : data.updatedAt
+        ? new Date(data.updatedAt)
+        : new Date();
+      return {
+        id: doc.id,
+        ...data,
+        createdAt,
+        updatedAt,
         } as Task;
       });
 
@@ -526,6 +527,9 @@ export async function getAllTasks(
         }
         if (filters.panel) {
           tasks = tasks.filter((t) => t.panel === filters.panel);
+        }
+        if (filters.version) {
+          tasks = tasks.filter((t) => t.version === filters.version);
         }
       }
 
@@ -573,36 +577,39 @@ export async function getAllTasks(
           } as Task;
         });
 
-        // Sort manually in memory by createdAt descending
-        tasks.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    // Sort manually in memory by createdAt descending
+    tasks.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
         // Apply all filters in memory
-        if (filters) {
-          if (filters.userId) {
-            tasks = tasks.filter((t) => t.userId === filters.userId);
-          }
-          if (filters.status) {
-            tasks = tasks.filter((t) => t.status === filters.status);
-          }
-          if (filters.projectId) {
-            tasks = tasks.filter((t) => t.projectId === filters.projectId);
-          }
-          if (filters.fromDate) {
-            tasks = tasks.filter((t) => t.createdAt >= filters.fromDate!);
-          }
-          if (filters.toDate) {
-            tasks = tasks.filter((t) => t.createdAt <= filters.toDate!);
-          }
-          if (filters.search) {
-            const searchLower = filters.search.toLowerCase();
-            tasks = tasks.filter(
-              (t) =>
-                t.title.toLowerCase().includes(searchLower) ||
-                t.description?.toLowerCase().includes(searchLower)
-            );
-          }
+  if (filters) {
+    if (filters.userId) {
+      tasks = tasks.filter((t) => t.userId === filters.userId);
+    }
+    if (filters.status) {
+      tasks = tasks.filter((t) => t.status === filters.status);
+    }
+    if (filters.projectId) {
+      tasks = tasks.filter((t) => t.projectId === filters.projectId);
+    }
+    if (filters.fromDate) {
+      tasks = tasks.filter((t) => t.createdAt >= filters.fromDate!);
+    }
+    if (filters.toDate) {
+      tasks = tasks.filter((t) => t.createdAt <= filters.toDate!);
+    }
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      tasks = tasks.filter(
+        (t) =>
+          t.title.toLowerCase().includes(searchLower) ||
+          t.description?.toLowerCase().includes(searchLower)
+      );
+    }
           if (filters.panel) {
             tasks = tasks.filter((t) => t.panel === filters.panel);
+          }
+          if (filters.version) {
+            tasks = tasks.filter((t) => t.version === filters.version);
           }
         }
 
@@ -1173,7 +1180,7 @@ export async function getTasksByUserType(
 }
 
 // Add a history entry for a task
-async function addTaskHistory(
+export async function addTaskHistory(
   taskId: string,
   action: HistoryAction,
   performedBy: string,

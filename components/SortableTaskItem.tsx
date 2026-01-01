@@ -348,7 +348,8 @@ export default function SortableTaskItem({
             >
               {task.status}
             </span>
-            {task.status === "Completed" && (
+            {task.status === "Completed" && 
+             task.assignedUserId === user?.uid && (
               <button
                 onClick={() => onSendNotification(task)}
                 className="px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm"

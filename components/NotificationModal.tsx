@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getAllUsers, createNotification } from "@/lib/firestore";
+import { getAllUsers, createNotification, addTaskHistory } from "@/lib/firestore";
 import { UserProfile } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -90,6 +90,32 @@ export default function NotificationModal({
       );
 
       await Promise.all(notificationPromises);
+      
+      // Add notification to task history
+      try {
+        const recipientNames = Array.from(selectedUsers)
+          .map((uid) => {
+            const recipient = allUsers.find((u) => u.uid === uid);
+            return recipient?.username || recipient?.email || uid;
+          })
+          .join(", ");
+        
+        await addTaskHistory(
+          taskId,
+          "notification_sent",
+          user.uid,
+          user.email || undefined,
+          userProfile?.username || undefined,
+          undefined,
+          undefined,
+          undefined,
+          `Notification sent to ${selectedUsers.size} user(s): ${recipientNames}${remark.trim() ? ` - ${remark.trim()}` : ""}`
+        );
+      } catch (historyError) {
+        console.error("Failed to log notification to task history:", historyError);
+        // Don't block the notification sending if history logging fails
+      }
+      
       onSuccess();
       onClose();
       alert(`Notifications sent to ${selectedUsers.size} user(s)`);

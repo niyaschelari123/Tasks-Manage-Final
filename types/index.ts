@@ -78,7 +78,8 @@ export type HistoryAction =
   | 'description_changed' 
   | 'project_changed'
   | 'version_changed'
-  | 'updated';
+  | 'updated'
+  | 'notification_sent';
 
 export interface TaskHistory {
   id: string;

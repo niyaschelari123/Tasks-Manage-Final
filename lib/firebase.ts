@@ -30,7 +30,13 @@ let db: Firestore | undefined;
 if (!isConfigValid()) {
   if (typeof window !== "undefined") {
     console.error(
-      "Firebase configuration is missing required values. Please check your .env.local file."
+      "Firebase configuration is missing required values. Please check your environment variables in Vercel.",
+      {
+        hasApiKey: !!firebaseConfig.apiKey,
+        hasAuthDomain: !!firebaseConfig.authDomain,
+        hasProjectId: !!firebaseConfig.projectId,
+        hasAppId: !!firebaseConfig.appId,
+      }
     );
   }
 } else {
@@ -42,6 +48,9 @@ if (!isConfigValid()) {
     }
     auth = getAuth(app);
     db = getFirestore(app);
+    if (typeof window !== "undefined") {
+      console.log("Firebase initialized successfully");
+    }
   } catch (error) {
     if (typeof window !== "undefined") {
       console.error("Error initializing Firebase:", error);
@@ -52,8 +61,14 @@ if (!isConfigValid()) {
 // Helper function to get auth with error handling
 export const getAuthInstance = (): Auth => {
   if (!auth) {
+    const missingVars = [];
+    if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY) missingVars.push("NEXT_PUBLIC_FIREBASE_API_KEY");
+    if (!process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN) missingVars.push("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN");
+    if (!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) missingVars.push("NEXT_PUBLIC_FIREBASE_PROJECT_ID");
+    if (!process.env.NEXT_PUBLIC_FIREBASE_APP_ID) missingVars.push("NEXT_PUBLIC_FIREBASE_APP_ID");
+    
     throw new Error(
-      "Firebase Auth is not initialized. Please check your Firebase configuration."
+      `Firebase Auth is not initialized. Missing environment variables: ${missingVars.join(", ")}. Please add them in Vercel project settings under Settings > Environment Variables.`
     );
   }
   return auth;
@@ -62,8 +77,14 @@ export const getAuthInstance = (): Auth => {
 // Helper function to get db with error handling
 export const getDbInstance = (): Firestore => {
   if (!db) {
+    const missingVars = [];
+    if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY) missingVars.push("NEXT_PUBLIC_FIREBASE_API_KEY");
+    if (!process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN) missingVars.push("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN");
+    if (!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) missingVars.push("NEXT_PUBLIC_FIREBASE_PROJECT_ID");
+    if (!process.env.NEXT_PUBLIC_FIREBASE_APP_ID) missingVars.push("NEXT_PUBLIC_FIREBASE_APP_ID");
+    
     throw new Error(
-      "Firestore is not initialized. Please check your Firebase configuration."
+      `Firestore is not initialized. Missing environment variables: ${missingVars.join(", ")}. Please add them in Vercel project settings under Settings > Environment Variables.`
     );
   }
   return db;

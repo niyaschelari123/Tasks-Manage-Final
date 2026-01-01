@@ -62,6 +62,8 @@ export default function TaskHistoryModal({
         return "Version Changed";
       case "updated":
         return "Updated";
+      case "notification_sent":
+        return "Notification sent";
       default:
         return action;
     }
