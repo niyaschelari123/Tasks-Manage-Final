@@ -37,7 +37,7 @@ export default function DebugProfilePage() {
         await createUserProfile({
           uid: user.uid,
           email: user.email,
-          displayName: null,
+          displayName: undefined,
           userType: 'admin',
           isAdmin: true,
         });

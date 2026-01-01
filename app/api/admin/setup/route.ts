@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
         const userProfile = {
           uid: userRecord.uid,
           email: email,
-          displayName: null,
+          displayName: undefined,
           userType: isAdmin ? 'admin' : 'user',
           isAdmin: isAdmin,
           createdAt: Timestamp.now(),
