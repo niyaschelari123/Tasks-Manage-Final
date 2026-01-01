@@ -74,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               username: "admin",
               userType: "admin",
               isAdmin: true,
+              status: 'active',
             });
             console.log("Admin profile created, fetching again...");
             await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -111,6 +112,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         );
       } else {
         console.log("User profile loaded successfully:", profile);
+        
+        // Check if user is inactive and sign them out
+        if (profile.status === 'inactive') {
+          console.log("User is inactive, signing out...");
+          await firebaseSignOut(auth);
+          setUser(null);
+          setUserProfile(null);
+        }
       }
     } catch (error) {
       console.error("Error loading user profile:", error);

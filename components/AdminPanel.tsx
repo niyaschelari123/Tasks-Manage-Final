@@ -368,6 +368,12 @@ export default function AdminPanel() {
       <div className="bg-white p-6 rounded-lg shadow-md">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold text-gray-800">Admin Panel</h2>
+          <button
+            onClick={() => window.location.href = "/admin/users"}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+          >
+            Manage Users
+          </button>
           <div className="flex gap-2">
             <button
               onClick={handleClearAllTasks}

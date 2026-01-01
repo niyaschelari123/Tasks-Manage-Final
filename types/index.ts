@@ -54,6 +54,8 @@ export interface User {
   displayName: string | null;
 }
 
+export type UserStatus = 'active' | 'inactive';
+
 export interface UserProfile {
   uid: string;
   email: string;
@@ -61,8 +63,11 @@ export interface UserProfile {
   username: string;
   userType: UserType;
   isAdmin: boolean;
+  status?: UserStatus; // User status: active or inactive
   createdAt: Date;
   updatedAt: Date;
+  deleted?: boolean; // Soft delete flag
+  deletedAt?: Date; // When the user was deleted
 }
 
 export type HistoryAction = 

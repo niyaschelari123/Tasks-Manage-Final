@@ -67,49 +67,27 @@ export default function LoginPage() {
     }
 
     try {
+      // Sign up is disabled - only admin can create accounts
       if (isSignUp) {
-        if (!userType) {
-          setError("Please select a user type");
-          setLoading(false);
-          return;
-        }
-        if (!username.trim()) {
-          setError("Please enter a username");
-          setLoading(false);
-          return;
-        }
-        // Step 1: Create Firebase Auth user (authentication)
-        const userCredential = await createUserWithEmailAndPassword(
-          auth,
-          email,
-          password
-        );
-        const user = userCredential.user;
-        console.log("Firebase Auth user created:", user.uid);
-
-        // Step 2: Create Firestore user profile (profile data in users collection)
-        const isAdmin = email.toLowerCase() === "admin@gmail.com";
-        try {
-          await createUserProfile({
-            uid: user.uid, // Use the same UID from Firebase Auth
-            email: user.email || email,
-            displayName: user.displayName || undefined,
-            username: username.trim(),
-            userType: userType,
-            isAdmin: isAdmin,
-          });
-          console.log("Firestore user profile created in users collection");
-        } catch (profileError: any) {
-          console.error("Error creating user profile:", profileError);
-          // If profile creation fails, we should handle it
-          // But don't delete the Auth user - let them try again or admin can fix it
-          throw new Error(
-            `Account created but profile setup failed. Please contact support. Error: ${profileError.message}`
-          );
-        }
-      } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        setError("Sign up is disabled. Please contact an administrator to create an account.");
+        setLoading(false);
+        return;
       }
+      
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      // Check if user is active
+      const { getUserProfile } = await import("@/lib/firestore");
+      const profile = await getUserProfile(userCredential.user.uid);
+      
+      if (profile && profile.status === 'inactive') {
+        // Sign out the user if they're inactive
+        await auth.signOut();
+        setError("Your account is inactive. Please contact an administrator.");
+        setLoading(false);
+        return;
+      }
+      
       router.push("/dashboard");
     } catch (err: any) {
       setError(err.message || "An error occurred");
@@ -236,7 +214,8 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 text-center">
+        {/* Sign up option commented out - only admin can create accounts */}
+        {/* <div className="mt-6 text-center">
           <button
             type="button"
             onClick={() => setIsSignUp(!isSignUp)}
@@ -246,7 +225,7 @@ export default function LoginPage() {
               ? "Already have an account? Sign in"
               : "Don't have an account? Sign up"}
           </button>
-        </div>
+        </div> */}
 
         <div className="mt-8 pt-6 border-t border-gray-200">
           <p className="text-center text-sm text-gray-600 mb-4">

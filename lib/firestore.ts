@@ -19,13 +19,15 @@ import {
   onSnapshot,
   serverTimestamp,
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { db, auth } from "./firebase";
 import {
   Task,
   Project,
   TaskStatus,
   UserProfile,
   UserType,
+  UserStatus,
   ProjectStatus,
   TaskHistory,
   HistoryAction,
@@ -836,26 +838,19 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
       ...data,
       createdAt: data.createdAt?.toDate() || new Date(),
       updatedAt: data.updatedAt?.toDate() || new Date(),
+      deleted: data.deleted || false,
+      deletedAt: data.deletedAt?.toDate
+        ? data.deletedAt.toDate()
+        : data.deletedAt instanceof Date
+        ? data.deletedAt
+        : data.deletedAt
+        ? new Date(data.deletedAt)
+        : undefined,
+      status: data.status || 'active', // Default to active if not set
     } as UserProfile;
   }
   console.log("User profile not found in Firestore");
   return null;
-}
-
-export async function updateUserProfile(
-  uid: string,
-  updates: Partial<UserProfile>
-) {
-  if (!db) {
-    throw new Error("Firestore is not initialized");
-  }
-
-  const userRef = doc(db, "users", uid);
-  const cleanedUpdates = removeUndefinedFields({
-    ...updates,
-    updatedAt: Timestamp.now(),
-  });
-  await updateDoc(userRef, cleanedUpdates);
 }
 
 export async function getUsersByType(
@@ -874,7 +869,7 @@ export async function getUsersByType(
   })) as UserProfile[];
 }
 
-export async function getAllUsers(): Promise<UserProfile[]> {
+export async function getAllUsers(includeDeleted = false): Promise<UserProfile[]> {
   if (!db) {
     throw new Error("Firestore is not initialized");
   }
@@ -906,11 +901,25 @@ export async function getAllUsers(): Promise<UserProfile[]> {
           : data.updatedAt instanceof Date
           ? data.updatedAt
           : new Date(),
+        deleted: data.deleted || false,
+        deletedAt: data.deletedAt?.toDate
+          ? data.deletedAt.toDate()
+          : data.deletedAt instanceof Date
+          ? data.deletedAt
+          : data.deletedAt
+          ? new Date(data.deletedAt)
+          : undefined,
+        status: data.status || 'active', // Default to active if not set
       };
     }) as UserProfile[];
 
-    console.log("getAllUsers: Returning", users.length, "users:", users);
-    return users;
+    // Filter out deleted users unless includeDeleted is true
+    const filteredUsers = includeDeleted
+      ? users
+      : users.filter((user) => !user.deleted);
+
+    console.log("getAllUsers: Returning", filteredUsers.length, "users:", filteredUsers);
+    return filteredUsers;
   } catch (error: any) {
     console.error("Error getting all users:", error);
     console.error("Error code:", error?.code);
@@ -1857,5 +1866,122 @@ export async function deleteImportantItem(id: string): Promise<void> {
   } catch (error: any) {
     console.error("Error deleting important item:", error);
     throw new Error(`Failed to delete important item: ${error.message}`);
+  }
+}
+
+// ==================== User Management Functions ====================
+
+/**
+ * Update user profile
+ */
+export async function updateUserProfile(
+  uid: string,
+  updates: Partial<Omit<UserProfile, "uid" | "createdAt" | "updatedAt">>
+): Promise<void> {
+  if (!db) {
+    throw new Error("Firestore is not initialized");
+  }
+
+  try {
+    const userRef = doc(db, "users", uid);
+    const updateData: any = {
+      ...updates,
+      updatedAt: Timestamp.now(),
+    };
+
+    // Remove undefined fields
+    const cleanedData = removeUndefinedFields(updateData);
+
+    await updateDoc(userRef, cleanedData);
+  } catch (error: any) {
+    console.error("Error updating user profile:", error);
+    throw new Error(`Failed to update user profile: ${error.message}`);
+  }
+}
+
+/**
+ * Soft delete a user
+ */
+export async function softDeleteUser(uid: string): Promise<void> {
+  if (!db) {
+    throw new Error("Firestore is not initialized");
+  }
+
+  try {
+    const userRef = doc(db, "users", uid);
+    await updateDoc(userRef, {
+      deleted: true,
+      deletedAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+  } catch (error: any) {
+    console.error("Error soft deleting user:", error);
+    throw new Error(`Failed to delete user: ${error.message}`);
+  }
+}
+
+/**
+ * Restore a soft-deleted user
+ */
+export async function restoreUser(uid: string): Promise<void> {
+  if (!db) {
+    throw new Error("Firestore is not initialized");
+  }
+
+  try {
+    const userRef = doc(db, "users", uid);
+    await updateDoc(userRef, {
+      deleted: false,
+      deletedAt: null,
+      updatedAt: Timestamp.now(),
+    });
+  } catch (error: any) {
+    console.error("Error restoring user:", error);
+    throw new Error(`Failed to restore user: ${error.message}`);
+  }
+}
+
+/**
+ * Create a new user (admin only)
+ * Creates both Firebase Auth user and Firestore profile
+ */
+export async function createUser(
+  email: string,
+  password: string,
+  username: string,
+  userType: UserType
+): Promise<string> {
+  if (!auth) {
+    throw new Error("Firebase Auth is not initialized");
+  }
+  if (!db) {
+    throw new Error("Firestore is not initialized");
+  }
+
+  try {
+    // Step 1: Create Firebase Auth user
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+    const user = userCredential.user;
+
+    // Step 2: Create Firestore user profile
+    const isAdmin = email.toLowerCase() === "admin@gmail.com";
+    await createUserProfile({
+      uid: user.uid,
+      email: user.email || email,
+      displayName: undefined,
+      username: username.trim(),
+      userType: userType,
+      isAdmin: isAdmin,
+      status: 'active', // New users are active by default
+    });
+
+    return user.uid;
+  } catch (error: any) {
+    console.error("Error creating user:", error);
+    throw new Error(`Failed to create user: ${error.message}`);
   }
 }
