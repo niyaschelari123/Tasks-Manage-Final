@@ -18,6 +18,7 @@ import TaskForm from "./TaskForm";
 import TaskFormModal from "./TaskFormModal";
 import TaskHistoryModal from "./TaskHistoryModal";
 import SortableTaskItem from "./SortableTaskItem";
+import NotificationModal from "./NotificationModal";
 import {
   DndContext,
   closestCenter,
@@ -55,6 +56,7 @@ export default function TaskList({
   const [filterByMe, setFilterByMe] = useState(true); // Default filter by current user for non-admin
   const [showAllTasks, setShowAllTasks] = useState(false); // Show all tasks checkbox
   const [isInitialized, setIsInitialized] = useState(false); // Track if URL params have been read
+  const [hasSetInitialDefaults, setHasSetInitialDefaults] = useState(false); // Track if initial defaults have been set
   const [updatingAssignedUser, setUpdatingAssignedUser] = useState<
     string | null
   >(null); // Track which task is being updated
@@ -86,6 +88,11 @@ export default function TaskList({
   const [showVersionModal, setShowVersionModal] = useState(false);
   const [taskForVersion, setTaskForVersion] = useState<Task | null>(null);
   const [versionInput, setVersionInput] = useState("");
+  // Notification modal
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [taskForNotification, setTaskForNotification] = useState<Task | null>(
+    null
+  );
   // Excel export modal
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportProjectId, setExportProjectId] = useState("");
@@ -191,23 +198,32 @@ export default function TaskList({
 
   useEffect(() => {
     if (user && isInitialized) {
-      // Only set defaults if URL params weren't loaded (first visit)
+      // Only set defaults once on initial load if URL params weren't loaded (first visit)
       // If URL params exist, they've already been set in the URL reading useEffect
-      const hasURLParams = searchParams.toString().length > 0;
+      if (!hasSetInitialDefaults) {
+        const hasURLParams = searchParams.toString().length > 0;
+        const hasExplicitFilterByMe = searchParams.has("filterByMe");
+        const hasExplicitShowAllTasks = searchParams.has("showAllTasks");
 
-      if (!hasURLParams) {
-        // Set default filter by user for non-admin users
-        const isAdminUser = user.email?.toLowerCase() === "admin@gmail.com";
-        if (!isAdminUser) {
-          // Non-admin users see their tasks by default
-          setFilterByMe(true);
-        } else {
-          // Admin sees all tasks by default
-          setFilterByMe(false);
+        // Only set defaults if:
+        // 1. No URL params at all (first visit), OR
+        // 2. URL has params but neither filterByMe nor showAllTasks is explicitly set (initial state)
+        if (!hasURLParams || (!hasExplicitFilterByMe && !hasExplicitShowAllTasks)) {
+          // Set default filter by user for non-admin users
+          const isAdminUser = user.email?.toLowerCase() === "admin@gmail.com";
+          if (!isAdminUser) {
+            // Non-admin users see their tasks by default
+            setFilterByMe(true);
+          } else {
+            // Admin sees all tasks by default
+            setFilterByMe(false);
+          }
         }
+        setHasSetInitialDefaults(true);
       }
 
-      loadTasks(false); // Reset to first page when filters change
+      // Only reload tasks when filters actually change, not when filterByMe changes due to user interaction
+      // We'll reload tasks in a separate effect that watches filters and showAllTasks
       // Load all users for assigned user dropdown
       loadAllUsers();
       // Load available task statuses
@@ -216,12 +232,16 @@ export default function TaskList({
   }, [
     user,
     userProfile,
-    filters,
-    filterByMe,
-    showAllTasks,
     isInitialized,
-    searchParams,
+    hasSetInitialDefaults,
   ]);
+
+  // Separate effect to reload tasks when filters change (including filterByMe)
+  useEffect(() => {
+    if (user && isInitialized && hasSetInitialDefaults) {
+      loadTasks(false); // Reset to first page when filters change
+    }
+  }, [filters, filterByMe, showAllTasks, isInitialized, hasSetInitialDefaults, user]);
 
   const loadTaskStatuses = async () => {
     try {
@@ -691,66 +711,6 @@ export default function TaskList({
   };
 
   // Handle version submission when completing a task
-  const handleVersionSubmit = async (skipVersion = false) => {
-    if (!taskForVersion) return;
-
-    if (!skipVersion && !versionInput.trim()) {
-      alert(
-        "Please enter a version number or click 'Complete without version'"
-      );
-      return;
-    }
-
-    try {
-      setUpdatingStatus(taskForVersion.id);
-      const updateData: { status: "Completed"; version?: string } = {
-        status: "Completed",
-      };
-
-      // Only add version if provided
-      if (!skipVersion && versionInput.trim()) {
-        updateData.version = versionInput.trim();
-      }
-
-      await updateTask(
-        taskForVersion.id,
-        updateData,
-        user
-          ? {
-              uid: user.uid,
-              email: user.email || undefined,
-              username: userProfile?.username || undefined,
-            }
-          : undefined
-      );
-
-      // Update local state
-      setTasks((prevTasks) =>
-        prevTasks.map((t) =>
-          t.id === taskForVersion.id
-            ? {
-                ...t,
-                status: "Completed",
-                version: skipVersion
-                  ? t.version
-                  : versionInput.trim() || t.version,
-              }
-            : t
-        )
-      );
-
-      // Close modal and reset
-      setShowVersionModal(false);
-      setTaskForVersion(null);
-      setVersionInput("");
-    } catch (error) {
-      console.error("Error updating task with version:", error);
-      alert("Failed to update task");
-    } finally {
-      setUpdatingStatus(null);
-    }
-  };
-
   const handleDelete = async (task: Task) => {
     if (!canEditTask(task)) {
       alert("You can only delete your own tasks or tasks assigned to you");
@@ -814,6 +774,71 @@ export default function TaskList({
     } finally {
       setUpdatingAssignedUser(null);
     }
+  };
+
+  const handleVersionSubmit = async (skipVersion = false) => {
+    if (!taskForVersion) return;
+
+    if (!skipVersion && !versionInput.trim()) {
+      alert(
+        "Please enter a version number or click 'Complete without version'"
+      );
+      return;
+    }
+
+    try {
+      setUpdatingStatus(taskForVersion.id);
+      const updateData: { status: "Completed"; version?: string } = {
+        status: "Completed",
+      };
+
+      // Only add version if provided
+      if (!skipVersion && versionInput.trim()) {
+        updateData.version = versionInput.trim();
+      }
+
+      await updateTask(
+        taskForVersion.id,
+        updateData,
+        user
+          ? {
+              uid: user.uid,
+              email: user.email || undefined,
+              username: userProfile?.username || undefined,
+            }
+          : undefined
+      );
+
+      // Update local state
+      setTasks((prevTasks) =>
+        prevTasks.map((t) =>
+          t.id === taskForVersion.id
+            ? {
+                ...t,
+                status: "Completed",
+                version: skipVersion
+                  ? t.version
+                  : versionInput.trim() || t.version,
+              }
+            : t
+        )
+      );
+
+      // Close version modal (don't show notification modal automatically)
+      setShowVersionModal(false);
+      setTaskForVersion(null);
+      setVersionInput("");
+    } catch (error) {
+      console.error("Error updating task with version:", error);
+      alert("Failed to update task");
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
+
+  const handleSendNotification = (task: Task) => {
+    setTaskForNotification(task);
+    setShowNotificationModal(true);
   };
 
   const canEditTask = (task: Task) => {
@@ -1401,6 +1426,7 @@ export default function TaskList({
                         setSelectedTaskForHistory(task);
                         setHistoryModalOpen(true);
                       }}
+                      onSendNotification={handleSendNotification}
                     />
                   );
                 })}
@@ -1455,7 +1481,7 @@ export default function TaskList({
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
-                  handleVersionSubmit();
+                  handleVersionSubmit(false);
                 }
               }}
               autoFocus
@@ -1495,6 +1521,23 @@ export default function TaskList({
           </div>
         </div>
       </TaskFormModal>
+
+      {/* Notification Modal */}
+      {taskForNotification && (
+        <NotificationModal
+          isOpen={showNotificationModal}
+          onClose={() => {
+            setShowNotificationModal(false);
+            setTaskForNotification(null);
+          }}
+          taskId={taskForNotification.id}
+          taskTitle={taskForNotification.title}
+          onSuccess={() => {
+            // Reload tasks after notification is sent
+            loadTasks();
+          }}
+        />
+      )}
 
       {/* Excel Export Modal */}
       <TaskFormModal

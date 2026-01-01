@@ -9,6 +9,7 @@ import TaskList from "@/components/TaskList";
 import ProjectManager from "@/components/ProjectManager";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AdminPanel from "@/components/AdminPanel";
+import NotificationDropdown from "@/components/NotificationDropdown";
 
 export default function DashboardPage() {
   const { user, userProfile, signOut } = useAuth();
@@ -56,6 +57,7 @@ export default function DashboardPage() {
                 Task Management System
               </h1>
               <div className="flex items-center gap-4">
+                <NotificationDropdown />
                 <span className="text-sm text-gray-600">{user?.email}</span>
                 <button
                   onClick={handleSignOut}

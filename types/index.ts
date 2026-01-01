@@ -89,3 +89,19 @@ export interface TaskHistory {
   description?: string; // Human-readable description
 }
 
+export interface Notification {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  recipientId: string; // User ID who should receive the notification
+  senderId: string; // User ID who sent the notification
+  senderEmail?: string;
+  senderUsername?: string;
+  type: 'task_completed' | 'task_assigned' | 'task_updated' | 'other';
+  message: string;
+  remark?: string; // Optional remark/comment
+  read: boolean;
+  createdAt: Date;
+  readAt?: Date;
+}
+

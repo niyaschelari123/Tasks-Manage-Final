@@ -15,6 +15,9 @@ import {
   startAfter,
   QueryDocumentSnapshot,
   DocumentData,
+  writeBatch,
+  onSnapshot,
+  serverTimestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import {
@@ -26,6 +29,7 @@ import {
   ProjectStatus,
   TaskHistory,
   HistoryAction,
+  Notification,
 } from "@/types";
 
 // Helper function to remove undefined values from object (recursive for nested objects)
@@ -1359,4 +1363,251 @@ export async function deleteTaskStatus(statusToDelete: string) {
   if (filteredStatuses.length < currentStatuses.length) {
     await setDoc(statusRef, { statuses: filteredStatuses });
   }
+}
+
+// Notification functions
+export async function createNotification(notification: {
+  taskId: string;
+  taskTitle: string;
+  recipientId: string;
+  senderId: string;
+  senderEmail?: string;
+  senderUsername?: string;
+  type: "task_completed" | "task_assigned" | "task_updated" | "other";
+  message: string;
+  remark?: string;
+}) {
+  if (!db) {
+    throw new Error("Firestore is not initialized");
+  }
+
+  try {
+    const notificationRef = doc(collection(db, "notifications"));
+    await setDoc(notificationRef, {
+      ...notification,
+      read: false,
+      createdAt: serverTimestamp(),
+    });
+    return notificationRef.id;
+  } catch (error) {
+    console.error("Error creating notification:", error);
+    throw error;
+  }
+}
+
+export async function getNotifications(
+  userId: string
+): Promise<Notification[]> {
+  if (!db) {
+    throw new Error("Firestore is not initialized");
+  }
+
+  try {
+    const q = query(
+      collection(db, "notifications"),
+      where("recipientId", "==", userId),
+      orderBy("createdAt", "desc"),
+      limit(50)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate
+          ? data.createdAt.toDate()
+          : data.createdAt instanceof Date
+          ? data.createdAt
+          : new Date(),
+        readAt: data.readAt?.toDate
+          ? data.readAt.toDate()
+          : data.readAt instanceof Date
+          ? data.readAt
+          : undefined,
+      } as Notification;
+    });
+  } catch (error) {
+    console.error("Error fetching notifications:", error);
+    throw error;
+  }
+}
+
+export async function getUnreadNotificationCount(
+  userId: string
+): Promise<number> {
+  if (!db) {
+    throw new Error("Firestore is not initialized");
+  }
+
+  try {
+    const q = query(
+      collection(db, "notifications"),
+      where("recipientId", "==", userId),
+      where("read", "==", false)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.size;
+  } catch (error) {
+    console.error("Error fetching unread notification count:", error);
+    return 0;
+  }
+}
+
+export async function markNotificationAsRead(notificationId: string) {
+  if (!db) {
+    throw new Error("Firestore is not initialized");
+  }
+
+  try {
+    const notificationRef = doc(db, "notifications", notificationId);
+    await updateDoc(notificationRef, {
+      read: true,
+      readAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Error marking notification as read:", error);
+    throw error;
+  }
+}
+
+export async function markAllNotificationsAsRead(userId: string) {
+  if (!db) {
+    throw new Error("Firestore is not initialized");
+  }
+
+  try {
+    const q = query(
+      collection(db, "notifications"),
+      where("recipientId", "==", userId),
+      where("read", "==", false)
+    );
+    const snapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    snapshot.docs.forEach((doc) => {
+      const notificationRef = doc.ref;
+      batch.update(notificationRef, {
+        read: true,
+        readAt: serverTimestamp(),
+      });
+    });
+    await batch.commit();
+  } catch (error) {
+    console.error("Error marking all notifications as read:", error);
+    throw error;
+  }
+}
+
+export async function deleteAllNotifications(userId: string) {
+  if (!db) {
+    throw new Error("Firestore is not initialized");
+  }
+
+  try {
+    const q = query(
+      collection(db, "notifications"),
+      where("recipientId", "==", userId)
+    );
+    const snapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    snapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+  } catch (error) {
+    console.error("Error deleting all notifications:", error);
+    throw error;
+  }
+}
+
+// Real-time listener for notifications
+export function subscribeToNotifications(
+  userId: string,
+  callback: (notifications: Notification[]) => void
+): () => void {
+  if (!db) {
+    throw new Error("Firestore is not initialized");
+  }
+
+  let unsubscribe: (() => void) | null = null;
+
+  const setupSubscription = (useOrderBy: boolean) => {
+    if (!db) {
+      callback([]);
+      return;
+    }
+
+    try {
+      let q;
+      if (useOrderBy) {
+        q = query(
+          collection(db, "notifications"),
+          where("recipientId", "==", userId),
+          orderBy("createdAt", "desc"),
+          limit(50)
+        );
+      } else {
+        q = query(
+          collection(db, "notifications"),
+          where("recipientId", "==", userId),
+          limit(50)
+        );
+      }
+
+      unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          const notifications = snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              createdAt: data.createdAt?.toDate
+                ? data.createdAt.toDate()
+                : data.createdAt instanceof Date
+                ? data.createdAt
+                : new Date(),
+              readAt: data.readAt?.toDate
+                ? data.readAt.toDate()
+                : data.readAt instanceof Date
+                ? data.readAt
+                : undefined,
+            } as Notification;
+          });
+
+          // If not using orderBy, sort in memory
+          if (!useOrderBy) {
+            notifications.sort(
+              (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+            );
+          }
+
+          callback(notifications);
+        },
+        (error) => {
+          console.error("Error in notification subscription:", error);
+          // If index error and we were using orderBy, try without it
+          if (error?.code === "failed-precondition" && useOrderBy) {
+            console.warn("Index not found, using fallback query");
+            setupSubscription(false);
+          } else {
+            // Return empty array on error
+            callback([]);
+          }
+        }
+      );
+    } catch (error) {
+      console.error("Error setting up notification subscription:", error);
+      callback([]);
+    }
+  };
+
+  // Start with orderBy, fallback to without if index missing
+  setupSubscription(true);
+
+  return () => {
+    if (unsubscribe) {
+      unsubscribe();
+    }
+  };
 }
