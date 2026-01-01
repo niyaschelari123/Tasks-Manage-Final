@@ -77,7 +77,7 @@ export default function TaskForm({ task, projects, onSuccess, onCancel, onProjec
   useEffect(() => {
     if (projectId) {
       const selectedProject = projects.find((p) => p.id === projectId);
-      setHasPanels(selectedProject?.panels && selectedProject.panels.length > 0);
+      setHasPanels(!!(selectedProject?.panels && selectedProject.panels.length > 0));
       if (!selectedProject?.panels || selectedProject.panels.length === 0) {
         setPanel('');
       }
