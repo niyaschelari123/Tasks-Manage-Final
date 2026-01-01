@@ -1941,6 +1941,50 @@ export async function restoreUser(uid: string): Promise<void> {
   }
 }
 
+// ==================== TinyMCE API Key Management ====================
+
+/**
+ * Get TinyMCE API key from Firestore config
+ */
+export async function getTinyMCEApiKey(): Promise<string | null> {
+  if (!db) {
+    throw new Error("Firestore is not initialized");
+  }
+
+  try {
+    const configRef = doc(db, "config", "tinymceApiKey");
+    const snapshot = await getDoc(configRef);
+    if (snapshot.exists()) {
+      const data = snapshot.data();
+      return data.value || null;
+    }
+    return null;
+  } catch (error: any) {
+    console.error("Error getting TinyMCE API key:", error);
+    return null;
+  }
+}
+
+/**
+ * Set TinyMCE API key in Firestore config
+ */
+export async function setTinyMCEApiKey(apiKey: string): Promise<void> {
+  if (!db) {
+    throw new Error("Firestore is not initialized");
+  }
+
+  try {
+    const configRef = doc(db, "config", "tinymceApiKey");
+    await setDoc(configRef, {
+      value: apiKey.trim(),
+      updatedAt: Timestamp.now(),
+    });
+  } catch (error: any) {
+    console.error("Error setting TinyMCE API key:", error);
+    throw new Error(`Failed to set TinyMCE API key: ${error.message}`);
+  }
+}
+
 /**
  * Create a new user (admin only)
  * Creates both Firebase Auth user and Firestore profile

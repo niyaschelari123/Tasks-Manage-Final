@@ -15,6 +15,8 @@ import {
   deleteTaskStatus,
   deleteAllTasks,
   deleteAllProjects,
+  getTinyMCEApiKey,
+  setTinyMCEApiKey,
 } from "@/lib/firestore";
 import { Project, ProjectStatus, UserProfile } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
@@ -43,7 +45,11 @@ export default function AdminPanel() {
     userTypes: false,
     taskStatuses: false,
     projects: false,
+    settings: false,
   });
+  const [tinymceApiKey, setTinymceApiKey] = useState("");
+  const [tinymceApiKeyInput, setTinymceApiKeyInput] = useState("");
+  const [loadingApiKey, setLoadingApiKey] = useState(false);
 
   // Debug: Try to refresh profile if admin email but profile is null
   useEffect(() => {
@@ -68,6 +74,35 @@ export default function AdminPanel() {
       loadData();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (user?.email?.toLowerCase() === "admin@gmail.com") {
+      loadTinyMCEApiKey();
+    }
+  }, [user]);
+
+  const loadTinyMCEApiKey = async () => {
+    try {
+      const key = await getTinyMCEApiKey();
+      setTinymceApiKey(key || "");
+      setTinymceApiKeyInput(key || "");
+    } catch (error) {
+      console.error("Error loading TinyMCE API key:", error);
+    }
+  };
+
+  const handleSaveTinyMCEApiKey = async () => {
+    setLoadingApiKey(true);
+    try {
+      await setTinyMCEApiKey(tinymceApiKeyInput);
+      setTinymceApiKey(tinymceApiKeyInput);
+      alert("TinyMCE API key saved successfully!");
+    } catch (error: any) {
+      alert("Failed to save API key: " + error.message);
+    } finally {
+      setLoadingApiKey(false);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -752,6 +787,61 @@ export default function AdminPanel() {
             {error}
           </div>
         )}
+
+        {/* Settings Section */}
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <div
+            className="flex items-center justify-between cursor-pointer"
+            onClick={() => toggleSection("settings")}
+          >
+            <h3 className="text-lg font-semibold text-gray-800">Settings</h3>
+            <svg
+              className={`w-5 h-5 text-gray-500 transition-transform ${
+                expandedSections.settings ? "rotate-180" : ""
+              }`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </div>
+          {expandedSections.settings && (
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  TinyMCE API Key
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={tinymceApiKeyInput}
+                    onChange={(e) => setTinymceApiKeyInput(e.target.value)}
+                    placeholder="Enter TinyMCE API key"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                  <button
+                    onClick={handleSaveTinyMCEApiKey}
+                    disabled={loadingApiKey}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loadingApiKey ? "Saving..." : "Save"}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  {tinymceApiKey
+                    ? "API key is set. Get a free key from https://www.tiny.cloud/auth/signup/"
+                    : "No API key set. Get a free key from https://www.tiny.cloud/auth/signup/"}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
